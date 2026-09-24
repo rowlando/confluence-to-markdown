@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "confluence-word-export"
+version = "0.1.0"
+description = "Download Confluence page hierarchies as Word documents."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Confluence Word Export contributors" }]
+dependencies = [
+    "requests>=2.31",
+    "truststore>=0.9; python_version >= '3.10'",
+    "markitdown>=0.1",
+]
+
+[project.optional-dependencies]
+sanitise = ["pathvalidate>=3.0"]
+test = ["pytest>=7.0"]
+dev = ["pytest>=7.0", "ruff>=0.6"]
+
+[project.scripts]
+confluence-word-export = "confluence_word_export.cli:main"
+word-to-markdown = "word_to_markdown.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["confluence_word_export*", "word_to_markdown*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+src = ["src", "tests"]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "W"]
+# The formatter owns line length; long URLs/strings shouldn't fail lint.
+ignore = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"

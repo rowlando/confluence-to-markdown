@@ -1,0 +1,6 @@
+# Pages not suitable for local export.
+# Each non-empty, non-comment line is a case-insensitive title substring to exclude.
+draft
+archive
+obsolete
+do not use
