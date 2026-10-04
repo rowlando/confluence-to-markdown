@@ -2,7 +2,7 @@
 
 Decides how to handle each input:
 
-* MHTML ``.doc`` (Confluence export) -> parse, extract images into a sibling
+* MHTML ``.doc`` (Word export) -> parse, extract embedded images into a sibling
   ``*.assets/`` folder, rewrite links, then run the backend on the clean HTML.
 * Real ``.docx`` / binary ``.doc`` -> hand the file straight to the backend.
 * ``.html`` / ``.htm`` -> run the backend on the file's HTML directly.
@@ -78,6 +78,6 @@ def _render(source: Path, output: Path, backend: Backend) -> tuple[str, int]:
 
 
 def _assets_target(output: Path) -> tuple[Path, str]:
-    """Return the assets directory and its path relative to the Markdown file."""
+    """Return the embedded-image directory and its path relative to the Markdown file."""
     rel = f"{output.stem}.assets"
     return output.parent / rel, rel

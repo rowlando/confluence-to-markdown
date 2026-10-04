@@ -1,8 +1,8 @@
 from confluence_word_export.filters import (
     build_decisions,
     decide,
-    filter_pages,
     load_ignore_terms,
+    select_pages,
 )
 from confluence_word_export.models import Page
 
@@ -40,30 +40,40 @@ class TestIgnoreFile:
 
 
 class TestFiltering:
-    def test_no_include_matches_all(self):
+    def test_no_include_selects_all(self):
         d = decide("Anything", [], [])
-        assert d.included
+        assert d.selected
+        assert not d.excluded
+        assert not d.unselected
 
     def test_include_or_semantics(self):
-        assert decide("security guidance", ["security", "architecture"], []).included
-        assert decide("architecture notes", ["security", "architecture"], []).included
-        assert not decide("random", ["security", "architecture"], []).included
+        assert decide("security guidance", ["security", "architecture"], []).selected
+        assert decide("architecture notes", ["security", "architecture"], []).selected
+        assert not decide("random", ["security", "architecture"], []).selected
+
+    def test_include_miss_is_unselected_not_excluded(self):
+        d = decide("random", ["security"], [])
+        assert d.unselected
+        assert not d.selected
+        assert not d.excluded
 
     def test_exclude_overrides_include(self):
         d = decide("Draft security guidance", ["security"], ["draft"])
-        assert not d.included
+        assert d.excluded
+        assert not d.selected
+        assert not d.unselected
 
     def test_case_insensitive_substring(self):
-        assert not decide("Architecture guidance — DRAFT", [], ["draft"]).included
-        assert not decide("Architecture Archive", [], ["archive"]).included
+        assert decide("Architecture guidance — DRAFT", [], ["draft"]).excluded
+        assert decide("Architecture Archive", [], ["archive"]).excluded
 
-    def test_filter_pages(self):
+    def test_select_pages(self):
         pages = [
             make_page("1", "Security overview"),
             make_page("2", "Draft security notes"),
             make_page("3", "Cooking"),
         ]
-        kept = filter_pages(pages, ["security"], ["draft"])
+        kept = select_pages(pages, ["security"], ["draft"])
         assert [p.id for p in kept] == ["1"]
 
     def test_build_decisions_keys(self):
@@ -71,7 +81,7 @@ class TestFiltering:
         decisions = build_decisions(pages, [], [])
         assert set(decisions) == {"1", "2"}
 
-    def test_exclude_term_prunes_descendants(self):
+    def test_exclude_term_excludes_whole_subtree(self):
         pages = [
             make_page("root", "Root", parent=None, depth=0),
             make_page("arch", "Archived", parent="root", depth=1),
@@ -80,17 +90,30 @@ class TestFiltering:
             make_page("keep", "Current work", parent="root", depth=1),
         ]
         decisions = build_decisions(pages, [], ["archived"])
-        assert not decisions["arch"].included
-        assert not decisions["child"].included  # pruned via ancestor
-        assert not decisions["grand"].included  # pruned via ancestor
-        assert decisions["keep"].included
+        assert decisions["arch"].excluded
+        assert decisions["child"].excluded  # via ancestor
+        assert decisions["grand"].excluded  # via ancestor
+        assert decisions["keep"].selected
 
-    def test_include_miss_does_not_prune_descendants(self):
+    def test_exclude_term_excludes_unselected_descendants_too(self):
+        pages = [
+            make_page("root", "Root", parent=None, depth=0),
+            make_page("arch", "Archived security", parent="root", depth=1),
+            make_page("misc", "Misc", parent="arch", depth=2),
+            make_page("sec", "Security notes", parent="misc", depth=3),
+        ]
+        decisions = build_decisions(pages, ["security"], ["archived"])
+        assert decisions["arch"].excluded
+        assert decisions["misc"].excluded  # include miss, but excluded via ancestor
+        assert decisions["sec"].excluded  # include match, but excluded via ancestor
+
+    def test_unselected_parent_keeps_selected_child(self):
         pages = [
             make_page("root", "Root", parent=None, depth=0),
             make_page("parent", "Misc", parent="root", depth=1),
             make_page("child", "Security notes", parent="parent", depth=2),
         ]
         decisions = build_decisions(pages, ["security"], [])
-        assert not decisions["parent"].included  # include miss
-        assert decisions["child"].included  # still matched, not pruned
+        assert decisions["parent"].unselected  # include miss
+        assert not decisions["parent"].excluded
+        assert decisions["child"].selected  # unaffected by its unselected parent

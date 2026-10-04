@@ -248,6 +248,84 @@ class TestCliJsonFormat:
         ]
 
 
+class TestCliFilterStatuses:
+    """Excluded (exclude term, whole subtree) vs unselected (include miss)."""
+
+    def _json_lines(self, monkeypatch, capsys, tmp_path, *extra):
+        _patch(monkeypatch)
+        code = main([URL, "--output", str(tmp_path), "--format", "json", *extra])
+        assert code == 0
+        return [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+
+    def test_include_miss_reports_parent_unselected(
+        self, monkeypatch, capsys, tmp_path
+    ):
+        # "Team wiki" (111) misses the include term but its child
+        # "Authentication" (222) matches it.
+        lines = self._json_lines(monkeypatch, capsys, tmp_path, "--include", "auth")
+        statuses = {
+            line["pageId"]: line["status"] for line in lines if line["type"] == "result"
+        }
+        assert statuses == {
+            "111": "UNSELECTED",
+            "222": "DOWNLOADED",
+            "333": "UNSELECTED",
+        }
+        assert lines[0]["matchingPages"] == 1
+        assert lines[0]["excludedPages"] == 0
+        assert lines[0]["unselectedPages"] == 2
+        assert lines[-1]["excluded"] == 0
+        assert lines[-1]["unselected"] == 2
+        # The selected child keeps its place under its unselected parent.
+        root_dir = tmp_path / "Acme Docs"
+        assert (root_dir / "Team wiki" / "page-222.doc").exists()
+        assert not (root_dir / "page-111.doc").exists()
+
+    def test_exclude_term_reports_whole_subtree_excluded(
+        self, monkeypatch, capsys, tmp_path
+    ):
+        lines = self._json_lines(monkeypatch, capsys, tmp_path, "--exclude", "wiki")
+        statuses = {
+            line["pageId"]: line["status"] for line in lines if line["type"] == "result"
+        }
+        assert statuses == {
+            "111": "EXCLUDED",
+            "222": "EXCLUDED",
+            "333": "DOWNLOADED",
+        }
+        assert lines[0]["excludedPages"] == 2
+        assert lines[0]["unselectedPages"] == 0
+        assert lines[-1]["excluded"] == 2
+        assert lines[-1]["unselected"] == 0
+
+    def test_verbose_text_output_distinguishes_statuses(
+        self, monkeypatch, capsys, tmp_path
+    ):
+        _patch(monkeypatch)
+        code = main(
+            [
+                URL,
+                "--output",
+                str(tmp_path),
+                "--verbose",
+                "--include",
+                "auth",
+                "--exclude",
+                "draft",
+            ]
+        )
+        out = capsys.readouterr().out
+        assert code == 0
+        assert "UNSELECTED  Team wiki  (no include term matched)" in out
+        assert "EXCLUDED    Draft notes  (excluded by 'draft')" in out
+        assert "  Selected pages:    1" in out
+        assert "  Excluded pages:    1" in out
+        assert "  Unselected pages:  1" in out
+        assert "Pages selected:    1" in out
+        assert "Excluded:          1" in out
+        assert "Unselected:        1" in out
+
+
 class TestResolveVerify:
     def _args(self, **kw):
         import argparse

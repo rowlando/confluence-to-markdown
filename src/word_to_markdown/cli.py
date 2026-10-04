@@ -31,8 +31,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="word-to-markdown",
         description=(
-            "Convert a directory of Word documents (including Confluence "
-            "'Export to Word' MHTML .doc files) into a mirrored tree of "
+            "Convert a directory of Word exports (Confluence 'Export to Word' "
+            "MHTML .doc files) or genuine .docx/HTML files into a mirrored tree of "
             "Markdown, which is friendlier for agentic tools."
         ),
         epilog=(
@@ -60,7 +60,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--overwrite",
         action="store_true",
-        help="Replace existing Markdown/assets (default: skip existing).",
+        help="Replace existing Markdown and embedded images (default: skip existing).",
     )
     parser.add_argument(
         "--clean-names",

@@ -8,7 +8,7 @@ Two interchangeable backends are provided:
   higher-fidelity tables, at the cost of an external binary.
 
 Both expose the same small interface: turn an HTML string (already cleaned and
-with rewritten asset links) or a real Word file into Markdown text.
+with rewritten image links) or a real Word file into Markdown text.
 """
 
 from __future__ import annotations

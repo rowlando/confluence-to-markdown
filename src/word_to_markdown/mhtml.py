@@ -1,4 +1,4 @@
-"""Parse Confluence "Export to Word" MHTML documents.
+"""Parse Word exports (Confluence "Export to Word" MHTML files).
 
 Confluence's ``exportword`` endpoint does not produce a binary Word file; it
 produces an **MHTML** (``multipart/related``) container:
@@ -56,7 +56,7 @@ def is_mhtml(path: Path) -> bool:
     lowered = head.lower()
     if b"mime-version:" in lowered and b"multipart/related" in lowered:
         return True
-    # Some exports omit MIME-Version; a multipart/related header is enough.
+    # Some Word exports omit MIME-Version; a multipart/related header is enough.
     return b"content-type: multipart/related" in lowered
 
 

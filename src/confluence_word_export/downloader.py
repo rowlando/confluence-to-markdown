@@ -27,7 +27,7 @@ from confluence_word_export.models import (
 )
 
 DEFAULT_TIMEOUT = (10, 120)  # (connect, read) seconds
-# Responses smaller than this are almost certainly not a real Word document.
+# Responses smaller than this are almost certainly not a real Word export.
 MIN_WORD_BYTES = 100
 _HTML_SNIFF_LEN = 512
 
@@ -185,7 +185,7 @@ class Downloader:
                     total += len(chunk)
             if total < MIN_WORD_BYTES:
                 raise InvalidWordResponse(
-                    f"response too small to be a Word document ({total} bytes)"
+                    f"response too small to be a Word export ({total} bytes)"
                 )
             os.replace(tmp_path, target_path)
         except BaseException:
@@ -215,5 +215,5 @@ def _reject_non_word(response: requests.Response, head: bytes) -> None:
     sniff = head.lstrip().lower()
     if sniff.startswith((b"<!doctype", b"<html", b"<?xml", b"{")):
         raise InvalidWordResponse(
-            "response body looks like HTML/JSON, not a Word document"
+            "response body looks like HTML/JSON, not a Word export"
         )

@@ -38,21 +38,34 @@ class Page:
 
 @dataclass(frozen=True)
 class FilterDecision:
-    """The outcome of applying title filters to a page."""
+    """The outcome of applying title filters to a page.
 
-    included: bool
-    reason: str
-    excluded_by_term: bool = False
-    """True when excluded by an explicit exclude/ignore term (not an include miss).
-
-    Term exclusions prune the whole subtree; include misses do not.
+    Exactly one of :attr:`selected`, :attr:`excluded` and :attr:`unselected`
+    holds for any decision.
     """
+
+    selected: bool
+    """True when the page will be downloaded."""
+    reason: str
+    excluded: bool = False
+    """True when removed by an exclude term, directly or via an ancestor.
+
+    Exclusion removes the page's whole subtree.
+    """
+
+    @property
+    def unselected(self) -> bool:
+        """True when no include term matched; descendants are unaffected."""
+        return not self.selected and not self.excluded
 
 
 # Download status values used in reporting and :class:`DownloadResult`.
 STATUS_DOWNLOADED = "DOWNLOADED"
 STATUS_SKIPPED = "SKIPPED"
 STATUS_EXCLUDED = "EXCLUDED"
+"""Removed by an exclude term, together with its whole subtree."""
+STATUS_UNSELECTED = "UNSELECTED"
+"""Not matched by any include term; selected descendants are still downloaded."""
 STATUS_FAILED = "FAILED"
 
 

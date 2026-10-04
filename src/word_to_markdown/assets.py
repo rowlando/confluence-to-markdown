@@ -1,6 +1,6 @@
-"""Extract embedded images from an MHTML document and rewrite references.
+"""Extract embedded images from a Word export and rewrite references.
 
-Confluence exports reference images by a bare hash (the basename of each part's
+Word exports reference images by a bare hash (the basename of each part's
 ``Content-Location``, e.g. ``file:///C:/<hash>``) and mark every part as
 ``application/octet-stream``. So we resolve ``<img>`` sources against the parts,
 sniff the real image type from magic bytes, write each referenced image into a
@@ -103,7 +103,7 @@ def _resolve(src: str | None, lookup: dict[str, ImagePart]) -> ImagePart | None:
 
 
 def _base_name(part: ImagePart, src: str | None) -> str:
-    """A stable stem for the asset, derived from its reference."""
+    """A stable stem for the embedded image, derived from its reference."""
     if part.content_location:
         stem = part.content_location.rsplit("/", 1)[-1]
     elif part.content_id:
