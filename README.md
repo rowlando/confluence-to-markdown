@@ -331,6 +331,29 @@ Both packages live under `src/` (a "src layout"), so an editable install
 (`pip install -e .`) is required for imports to resolve during development.
 Tests are split per package, mirroring the source tree.
 
+### Agent skills
+
+Claude Code skills are managed with [APM](https://github.com/microsoft/apm),
+much like npm: `apm.yml` declares them (cf. `package.json`), `apm.lock.yaml`
+pins the exact commits (cf. `package-lock.json`), and `apm install` puts them
+into `.claude/skills/` (cf. `node_modules/`), which is git-ignored along with
+APM's `apm_modules/` cache.
+
+In Claude Code cloud sessions, a SessionStart hook
+(`.claude/hooks/session-start.sh`) installs APM and runs `apm install`
+automatically. Locally, run it yourself:
+
+```bash
+uv tool install apm-cli   # or: pip install apm-cli
+apm install
+```
+
+To add or upgrade skills, edit `apm.yml`, run `apm install`, and commit
+`apm.yml` and `apm.lock.yaml`. In cloud sessions, edit `apm.yml` rather than
+running `apm install <package>`: the command-line form checks the package via
+the GitHub API, which cloud sessions block for repositories not attached to
+the session.
+
 ### Contributing
 
 This is a small stopgap tool for a handful of people, so there's no separate

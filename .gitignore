@@ -17,3 +17,7 @@ exports/
 # Personal exclusion terms (may reveal internal project/page names); the
 # .sample file is the one meant to be committed.
 .confluence-word-export-ignore
+
+# APM: download cache and installed skills (restored by `apm install`)
+apm_modules/
+.claude/skills/
