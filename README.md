@@ -5,10 +5,10 @@
 Two small, composable command-line tools (plus a shell script that chains them):
 
 1. **`confluence-word-export`** — downloads a Confluence page hierarchy as Word
-   documents. Given the URL of a root page, it discovers descendant pages via the
+   exports. Given the URL of a root page, it discovers descendant pages via the
    Confluence REST API, filters them by title, and downloads each selected page's
    published Word export, reproducing the Confluence hierarchy as local folders.
-2. **`word-to-markdown`** — converts that directory of Word documents into a
+2. **`word-to-markdown`** — converts that directory of Word exports into a
    mirrored tree of Markdown, which is much friendlier for agentic tools like
    GitHub Copilot and Claude Code.
 
@@ -61,7 +61,7 @@ scripts/export-to-markdown.sh \
   "https://your-site.atlassian.net/wiki/spaces/KEY/pages/12345/Title"
 ```
 
-That downloads the page hierarchy as Word documents into
+That downloads the page hierarchy as Word exports into
 `./confluence-export`, then converts them to Markdown in
 `./markdown-export`. See the sections below for filtering, options, and
 running each tool independently.
@@ -100,7 +100,7 @@ Create an API token at <https://id.atlassian.com/manage-profile/security/api-tok
 confluence-word-export ROOT_PAGE_URL [OPTIONS]
 ```
 
-Basic export (the root page itself is excluded by default):
+Basic run (the root page itself is not downloaded unless you pass `--include-root`):
 
 ```bash
 confluence-word-export \
@@ -108,7 +108,7 @@ confluence-word-export \
   --output ./exports
 ```
 
-Filtered export:
+Filtered run:
 
 ```bash
 confluence-word-export URL \
@@ -132,11 +132,11 @@ confluence-word-export URL --list-only
 | `--exclude TEXT` | Skip pages whose titles contain TEXT (repeatable). |
 | `--ignore-file PATH` | Extra exclusion terms file (default `./.confluence-word-export-ignore` if present). |
 | `--include-root` | Also download the supplied root page. |
-| `--list-only` | Show matching pages and intended paths without downloading. |
+| `--list-only` | Show selected pages and intended paths without downloading. |
 | `--format {text,json}` | Output format (default `text`). `json` writes one JSON object per line (JSON Lines) to stdout — see [Scripting / composability](#scripting--composability). |
 | `--manifest PATH` | Also write a JSON Lines record of every page processed to PATH, regardless of `--format`. |
-| `--overwrite` | Replace existing exported files (default: skip). |
-| `--verbose` | Show extra detail, including excluded pages. |
+| `--overwrite` | Replace existing Word exports (default: skip). |
+| `--verbose` | Show extra detail, including excluded and unselected pages. |
 | `--ca-bundle PATH` | Trust an additional CA bundle (e.g. a corporate proxy CA). |
 | `--system-certs` / `--no-system-certs` | Use / skip the OS trust store (auto-enabled when `truststore` is installed). |
 | `--insecure` | Disable TLS certificate verification (not recommended). |
@@ -146,14 +146,14 @@ confluence-word-export URL --list-only
 ## Filtering rules
 
 - Matching is case-insensitive literal substring on page titles only.
-- Include terms use OR semantics; with no include terms, all pages are eligible.
+- Include terms use OR semantics; with no include terms, all pages are selected.
 - Exclude terms (from `--exclude` and the ignore file) always override includes.
-- Excluding a page by an exclude/ignore term prunes its **entire subtree**: every
-  descendant is skipped too and no directory is created for it, so an ignored
-  section (e.g. "Archived") is omitted in full.
-- An include-filter miss does *not* prune the subtree — a non-matching parent may
-  still have matching children, which are downloaded and keep their correct
-  location.
+- A page matched by an exclude term is **excluded**, along with its **entire
+  subtree**: every descendant is excluded too and no directory is created for
+  it, so an ignored section (e.g. "Archived") is omitted in full.
+- A page that matches no include term is **unselected**, which does *not* prune
+  the subtree — an unselected parent may still have selected children, which
+  are downloaded and keep their correct location.
 
 ## Ignore file
 
@@ -164,7 +164,7 @@ lines beginning with `#` are comments. See
 
 ## Output layout
 
-A page that has children is represented as both a Word file and a directory:
+A page that has children is represented as both a Word export and a directory:
 
 ```text
 exports/
@@ -182,7 +182,7 @@ collisions are disambiguated with the page ID.
 
 ## Convert to Markdown
 
-The `word-to-markdown` command turns a directory of exported documents into a
+The `word-to-markdown` command turns a directory of Word exports into a
 mirrored tree of Markdown.
 
 ```bash
@@ -196,7 +196,7 @@ each `.doc` is actually an **MHTML** (`multipart/related`) container holding a
 quoted-printable HTML part plus embedded images. So the converter:
 
 1. Detects and unpacks the MHTML container (pure Python, standard library).
-2. Extracts embedded images into a per-document `*.assets/` folder and rewrites
+2. Extracts embedded images into a per-page `*.assets/` folder and rewrites
    the image links so they keep working in the Markdown.
 3. Converts the cleaned HTML to Markdown via a swappable backend.
 
@@ -220,7 +220,7 @@ preserves complex tables that markitdown may simplify.
 | --- | --- |
 | `--output PATH` | Output directory (default `./markdown-export`). |
 | `--backend NAME` | `markitdown` (default) or `pandoc`. |
-| `--overwrite` | Replace existing Markdown/assets (default: skip existing). |
+| `--overwrite` | Replace existing Markdown and embedded images (default: skip existing). |
 | `--clean-names` | Turn Confluence `+`-encoded names into ordinary spaced names. |
 | `--flatten` | Do not mirror subdirectories; write every `.md` in the output root. |
 | `--list-only` | Show what would be converted without writing anything. |
@@ -268,6 +268,13 @@ Lines / NDJSON) to stdout instead of prose — the human-readable notices you'd
 normally see move out of the way so stdout is safe to pipe into `jq`, `xargs`,
 or a future third tool. Each line has a `"type"` field (`run_started`, `page`,
 `file`, `result`, or `summary`) so consumers can filter with `jq 'select(...)'`.
+
+`confluence-word-export` gives each `result` a `status` of `DOWNLOADED`,
+`SKIPPED` (already present; not overwritten), `FAILED`, `EXCLUDED` (matched an
+exclude term, or sits beneath a page that did) or `UNSELECTED` (matched no
+include term). Before `UNSELECTED` existed, include-term misses were also
+reported as `EXCLUDED`; the `run_started` and `summary` lines now count the two
+separately (`excludedPages`/`unselectedPages`, `excluded`/`unselected`).
 
 ```bash
 # Which pages would download, as a plain list of titles?
@@ -396,5 +403,5 @@ recommended, prints a warning).
 
 ## Security note
 
-Exported Word documents inherit the sensitivity of their source pages. Store and
+Word exports inherit the sensitivity of their source pages. Store and
 share them accordingly.

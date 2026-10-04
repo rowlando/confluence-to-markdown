@@ -67,14 +67,14 @@ if [[ -z "$ROOT_URL" ]]; then
 fi
 
 # --- Step 1: download -------------------------------------------------------
-echo ">> [1/2] Downloading Word documents from Confluence..."
+echo ">> [1/2] Downloading Word exports from Confluence..."
 confluence-word-export "$ROOT_URL" \
   --output "$DOCS_DIR" \
   ${OVERWRITE:+$OVERWRITE} \
   ${EXPORT_PASSTHROUGH[@]+"${EXPORT_PASSTHROUGH[@]}"}
 
 # --- Step 2: convert --------------------------------------------------------
-echo ">> [2/2] Converting Word documents to Markdown..."
+echo ">> [2/2] Converting Word exports to Markdown..."
 word-to-markdown "$DOCS_DIR" \
   --output "$MARKDOWN_DIR" \
   --backend "$BACKEND" \
