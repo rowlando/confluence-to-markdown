@@ -6,6 +6,10 @@ Turns a Confluence page hierarchy into a local tree of Markdown, by way of each 
 
 ### Pages
 
+**Title**:
+A page's name in Confluence; the only thing title filters match against.
+_Avoid_: Name, file name
+
 **Root page**:
 The Confluence page whose URL the user supplies; the top of the hierarchy being exported.
 
@@ -50,7 +54,11 @@ The folder tree of Word exports, mirroring the page hierarchy.
 The folder tree of Markdown files converted from a Word export tree, mirroring it.
 
 **Mirrored hierarchy**:
-The shared shape of the Word export tree and the Markdown tree, which follows the Confluence page hierarchy.
+The shared shape of the Word export tree and the Markdown tree, which follows the Confluence page hierarchy whether or not each page in it was downloaded.
+
+**Embedded image**:
+An image carried inside a Word export and written out alongside its Markdown. Confluence attachments are not exported.
+_Avoid_: Asset, attachment
 
 **Skipped**:
 Left untouched because its output already exists; never a filtering outcome.
