@@ -126,3 +126,74 @@ class TestDescendants:
         session = FakeSession([resp])
         client = ConfluenceClient(SITE, AUTH, session=session)
         assert client.get_descendant_pages("100") == []
+
+    def test_requeries_pages_at_max_depth(self):
+        def item(pid, parent, depth):
+            return {
+                "id": pid,
+                "title": pid,
+                "type": "page",
+                "parentId": parent,
+                "depth": depth,
+            }
+
+        # First query reaches the API's depth cap (5) at page "d5".
+        first = FakeResponse(
+            json_data={
+                "results": [
+                    item("d1", "100", 1),
+                    item("d2", "d1", 2),
+                    item("d3", "d2", 3),
+                    item("d4", "d3", 4),
+                    item("d5", "d4", 5),
+                ],
+                "_links": {},
+            }
+        )
+        # Depths in the follow-up query are relative to "d5"; it hits the cap
+        # again at "d10", which needs one more query.
+        second = FakeResponse(
+            json_data={
+                "results": [
+                    item("d6", "d5", 1),
+                    item("d7", "d6", 2),
+                    item("d8", "d7", 3),
+                    item("d9", "d8", 4),
+                    item("d10", "d9", 5),
+                ],
+                "_links": {},
+            }
+        )
+        third = FakeResponse(json_data={"results": [item("d11", "d10", 1)]})
+        session = FakeSession([first, second, third])
+        client = ConfluenceClient(SITE, AUTH, session=session)
+
+        pages = client.get_descendant_pages("100")
+
+        assert [p.id for p in pages] == [f"d{i}" for i in range(1, 12)]
+        assert [p.depth for p in pages] == list(range(1, 12))
+        assert [url.rsplit("/", 2)[-2] for url, _ in session.calls] == [
+            "100",
+            "d5",
+            "d10",
+        ]
+
+    def test_no_requery_below_max_depth(self):
+        resp = FakeResponse(
+            json_data={
+                "results": [
+                    {
+                        "id": "1",
+                        "title": "A",
+                        "type": "page",
+                        "parentId": "100",
+                        "depth": 4,
+                    }
+                ],
+                "_links": {},
+            }
+        )
+        session = FakeSession([resp])
+        client = ConfluenceClient(SITE, AUTH, session=session)
+        assert [p.id for p in client.get_descendant_pages("100")] == ["1"]
+        assert len(session.calls) == 1
