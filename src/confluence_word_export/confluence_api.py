@@ -23,7 +23,8 @@ from confluence_word_export.models import Auth, Page
 
 DEFAULT_TIMEOUT = (10, 60)  # (connect, read) seconds
 DESCENDANTS_PAGE_LIMIT = 250
-# The API caps depth; request the documented maximum to obtain all descendants.
+# The API caps depth per query; deeper levels are fetched by re-querying
+# pages found at this depth.
 MAX_DESCENDANT_DEPTH = 5
 
 
@@ -98,10 +99,32 @@ class ConfluenceClient:
     def get_descendant_pages(self, root_page_id: str) -> list[Page]:
         """Return all descendant pages, following cursor-based pagination.
 
-        Only descendants of type ``page`` are returned.
+        Only descendants of type ``page`` are returned. The API caps each query
+        at ``MAX_DESCENDANT_DEPTH`` levels, so any page found at that depth is
+        queried in turn to reach deeper levels. Depths are always relative to
+        ``root_page_id``.
         """
         results: list[Page] = []
-        path: str | None = f"/wiki/api/v2/pages/{root_page_id}/descendants"
+        seen: set[str] = set()
+        # (page to query, depth of that page relative to the root)
+        pending: list[tuple[str, int]] = [(root_page_id, 0)]
+
+        while pending:
+            subtree_id, base_depth = pending.pop(0)
+            for page in self._fetch_descendants(subtree_id, base_depth):
+                if page.id in seen:
+                    continue
+                seen.add(page.id)
+                results.append(page)
+                if page.depth - base_depth >= MAX_DESCENDANT_DEPTH:
+                    pending.append((page.id, page.depth))
+
+        return results
+
+    def _fetch_descendants(self, page_id: str, base_depth: int) -> list[Page]:
+        """Fetch one depth-capped descendants query, offsetting depths."""
+        pages: list[Page] = []
+        path: str | None = f"/wiki/api/v2/pages/{page_id}/descendants"
         params: dict[str, Any] | None = {
             "limit": DESCENDANTS_PAGE_LIMIT,
             "depth": MAX_DESCENDANT_DEPTH,
@@ -110,15 +133,18 @@ class ConfluenceClient:
         while path is not None:
             data = self._get_json(path, params=params)
             for item in data.get("results", []):
-                page = _page_from_json(item, depth=item.get("depth"))
+                depth = _coerce_int(item.get("depth"))
+                page = _page_from_json(
+                    item, depth=base_depth + depth if depth is not None else None
+                )
                 if page is not None:
-                    results.append(page)
+                    pages.append(page)
 
             path = _next_link(data)
             # The cursor link already carries all query parameters.
             params = None
 
-        return results
+        return pages
 
 
 def _raise_for_status(response: requests.Response) -> None:
