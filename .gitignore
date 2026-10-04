@@ -17,3 +17,6 @@ exports/
 # Personal exclusion terms (may reveal internal project/page names); the
 # .sample file is the one meant to be committed.
 .confluence-word-export-ignore
+
+# APM dependencies
+apm_modules/

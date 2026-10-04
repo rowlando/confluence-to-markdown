@@ -1,0 +1,43 @@
+name: confluence-to-markdown
+version: 1.0.0
+description: Agent skills for confluence-to-markdown, managed by APM
+targets:
+  - claude
+
+# Matt Pocock's skills (https://github.com/mattpocock/skills), matching the
+# set shipped in the mattpocock-skills Claude Code plugin. Each skill is
+# referenced by sub-path so installs work without GitHub API access.
+# To upgrade, bump the tag on every line, run `apm install`, and commit the
+# updated .claude/skills/ and apm.lock.yaml.
+dependencies:
+  apm:
+    - mattpocock/skills/skills/engineering/ask-matt#v1.3.1
+    - mattpocock/skills/skills/engineering/diagnosing-bugs#v1.3.1
+    - mattpocock/skills/skills/engineering/grill-with-docs#v1.3.1
+    - mattpocock/skills/skills/engineering/triage#v1.3.1
+    - mattpocock/skills/skills/engineering/improve-codebase-architecture#v1.3.1
+    - mattpocock/skills/skills/engineering/setup-matt-pocock-skills#v1.3.1
+    - mattpocock/skills/skills/engineering/tdd#v1.3.1
+    - mattpocock/skills/skills/engineering/to-spec#v1.3.1
+    - mattpocock/skills/skills/engineering/to-tickets#v1.3.1
+    - mattpocock/skills/skills/engineering/wayfinder#v1.3.1
+    - mattpocock/skills/skills/engineering/implement#v1.3.1
+    - mattpocock/skills/skills/engineering/implement-spec#v1.3.1
+    - mattpocock/skills/skills/engineering/prototype#v1.3.1
+    - mattpocock/skills/skills/engineering/research#v1.3.1
+    - mattpocock/skills/skills/engineering/domain-modeling#v1.3.1
+    - mattpocock/skills/skills/engineering/codebase-design#v1.3.1
+    - mattpocock/skills/skills/engineering/code-review#v1.3.1
+    - mattpocock/skills/skills/engineering/pr#v1.3.1
+    - mattpocock/skills/skills/engineering/retro#v1.3.1
+    - mattpocock/skills/skills/engineering/wizard#v1.3.1
+    - mattpocock/skills/skills/productivity/grill-me#v1.3.1
+    - mattpocock/skills/skills/productivity/grilling#v1.3.1
+    - mattpocock/skills/skills/productivity/handoff#v1.3.1
+    - mattpocock/skills/skills/productivity/teach#v1.3.1
+    - mattpocock/skills/skills/productivity/to-questionnaire#v1.3.1
+    - mattpocock/skills/skills/productivity/wait-what#v1.3.1
+    - mattpocock/skills/skills/productivity/writing-for-agents#v1.3.1
+  mcp: []
+includes: auto
+scripts: {}
