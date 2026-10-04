@@ -24,10 +24,13 @@ from confluence_word_export.errors import (
 from confluence_word_export.filters import build_decisions, load_ignore_terms
 from confluence_word_export.hierarchy import build_hierarchy
 from confluence_word_export.models import (
+    OUTCOME_EXCLUDED,
+    OUTCOME_UNSELECTED,
     STATUS_DOWNLOADED,
     STATUS_EXCLUDED,
     STATUS_FAILED,
     STATUS_SKIPPED,
+    STATUS_UNSELECTED,
     DownloadResult,
     Page,
 )
@@ -40,7 +43,7 @@ DEFAULT_IGNORE_FILE = ".confluence-word-export-ignore"
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="confluence-word-export",
-        description="Download a Confluence page hierarchy as Word documents.",
+        description="Download a Confluence page hierarchy as Word exports.",
         epilog=(
             "Authentication is read from the CONFLUENCE_EMAIL and "
             "CONFLUENCE_API_TOKEN environment variables.\n\n"
@@ -112,7 +115,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--verbose",
         action="store_true",
-        help="Show extra detail, including excluded pages.",
+        help="Show extra detail, including excluded and unselected pages.",
     )
     parser.add_argument(
         "--ca-bundle",
@@ -338,8 +341,9 @@ def _print_startup_summary(
     ignore_used,
     recorder,
 ):
-    matched = sum(1 for d in decisions.values() if d.included)
-    excluded = sum(1 for d in decisions.values() if not d.included)
+    selected = sum(1 for d in decisions.values() if d.selected)
+    excluded = sum(1 for d in decisions.values() if d.outcome == OUTCOME_EXCLUDED)
+    unselected = sum(1 for d in decisions.values() if d.outcome == OUTCOME_UNSELECTED)
 
     recorder.emit(
         {
@@ -349,8 +353,9 @@ def _print_startup_summary(
             "rootPageTitle": root_page.title,
             "includeRoot": args.include_root,
             "descendantPages": len(descendants),
-            "matchingPages": matched,
+            "matchingPages": selected,
             "excludedPages": excluded,
+            "unselectedPages": unselected,
             "outputDirectory": str(output_dir),
             "ignoreFile": str(ignore_used) if ignore_used is not None else None,
         }
@@ -364,8 +369,9 @@ def _print_startup_summary(
     print(f"  Root page ID:      {root_page.id}")
     print(f"  Download root:     {'yes' if args.include_root else 'no'}")
     print(f"  Descendant pages:  {len(descendants)}")
-    print(f"  Matching pages:    {matched}")
+    print(f"  Selected pages:    {selected}")
     print(f"  Excluded pages:    {excluded}")
+    print(f"  Unselected pages:  {unselected}")
     print(f"  Output directory:  {output_dir}")
     if ignore_used is not None:
         print(f"  Ignore file:       {ignore_used}")
@@ -405,7 +411,7 @@ def _print_list(root_page, descendants, placed, decisions, include_root, recorde
     if (
         include_root
         and decisions.get(root_page.id, None)
-        and decisions[root_page.id].included
+        and decisions[root_page.id].selected
     ):
         p = placed[root_page.id]
         recorder.emit(
@@ -421,7 +427,7 @@ def _print_list(root_page, descendants, placed, decisions, include_root, recorde
 
     for page in _ordered_pages(root_page, descendants, placed):
         decision = decisions.get(page.id)
-        if decision is None or not decision.included:
+        if decision is None or not decision.selected:
             continue
         p = placed[page.id]
         recorder.emit(
@@ -443,14 +449,14 @@ def _print_list(root_page, descendants, placed, decisions, include_root, recorde
     if (
         include_root
         and decisions.get(root_page.id, None)
-        and decisions[root_page.id].included
+        and decisions[root_page.id].selected
     ):
         p = placed[root_page.id]
         print(f"{p.base_name} [pageId: {root_page.id}]")
 
     for page in _ordered_pages(root_page, descendants, placed):
         decision = decisions.get(page.id)
-        if decision is None or not decision.included:
+        if decision is None or not decision.selected:
             continue
         p = placed[page.id]
         indent = "  " * page.depth
@@ -481,13 +487,15 @@ def _download_all(
     results: list[DownloadResult] = []
     for page in pages:
         decision = decisions.get(page.id)
-        if decision is None or not decision.included:
+        if decision is None or not decision.selected:
             reason = decision.reason if decision else "n/a"
-            excluded_result = DownloadResult(page, STATUS_EXCLUDED, None, None)
-            recorder.emit(_result_json(excluded_result, reason=reason))
+            excluded = decision is not None and decision.outcome == OUTCOME_EXCLUDED
+            status = STATUS_EXCLUDED if excluded else STATUS_UNSELECTED
+            not_selected = DownloadResult(page, status, None, None)
+            recorder.emit(_result_json(not_selected, reason=reason))
             if recorder.fmt != "json" and args.verbose:
-                print(f"EXCLUDED  {page.title}  ({reason})")
-            results.append(excluded_result)
+                print(f"{status:<10}  {page.title}  ({reason})")
+            results.append(not_selected)
             continue
 
         result = downloader.download(placed[page.id], overwrite=args.overwrite)
@@ -524,20 +532,22 @@ def _print_result(result: DownloadResult, verbose: bool, recorder) -> None:
 
 
 def _print_final_summary(descendants, decisions, results, recorder) -> int:
-    matched = sum(1 for d in decisions.values() if d.included)
+    selected = sum(1 for d in decisions.values() if d.selected)
     downloaded = sum(1 for r in results if r.status == STATUS_DOWNLOADED)
     skipped = sum(1 for r in results if r.status == STATUS_SKIPPED)
     excluded = sum(1 for r in results if r.status == STATUS_EXCLUDED)
+    unselected = sum(1 for r in results if r.status == STATUS_UNSELECTED)
     failed = sum(1 for r in results if r.status == STATUS_FAILED)
 
     recorder.emit(
         {
             "type": "summary",
             "discovered": len(descendants),
-            "matched": matched,
+            "matched": selected,
             "downloaded": downloaded,
             "skipped": skipped,
             "excluded": excluded,
+            "unselected": unselected,
             "failed": failed,
         }
     )
@@ -548,10 +558,11 @@ def _print_final_summary(descendants, decisions, results, recorder) -> int:
     print("Export complete" if failed == 0 else "Export finished with failures")
     print()
     print(f"Pages discovered:  {len(descendants)}")
-    print(f"Pages matched:     {matched}")
+    print(f"Pages selected:    {selected}")
     print(f"Downloaded:        {downloaded}")
     print(f"Skipped existing:  {skipped}")
     print(f"Excluded:          {excluded}")
+    print(f"Unselected:        {unselected}")
     print(f"Failed:            {failed}")
 
     return EXIT_DOWNLOAD_FAILURES if failed else EXIT_SUCCESS

@@ -2,10 +2,10 @@
 
 Hierarchy is built from page IDs and parent IDs only, never from titles or URL
 structure (PRD section 12.4). A page that has children is represented as both a
-Word file and a directory sharing the same base name. Directories for pages
-excluded by an include-filter miss are still created so any matching descendants
-keep their correct location; a page excluded by an exclude/ignore term prunes its
-whole subtree, so no directory is created for it.
+Word export and a directory sharing the same base name. Directories for
+unselected pages (an include-term miss) are still created so any selected
+descendants keep their correct location; a page excluded by an exclude term
+prunes its whole subtree, so no directory is created for it.
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ class PlacedPage:
     base_name: str
     """Collision-resolved, sanitised segment derived from the page title."""
     parent_dir: Path
-    """Directory in which this page's Word file is written."""
+    """Directory in which this page's Word export is written."""
     dir_path: Path
     """Directory representing this page's children (``parent_dir / base_name``)."""
     has_children: bool

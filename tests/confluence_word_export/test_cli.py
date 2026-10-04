@@ -150,7 +150,7 @@ class TestCliDownload:
         code = main([URL, "--output", str(tmp_path)])
         out = capsys.readouterr().out
         assert code == 0
-        # Root excluded by default; three descendant pages downloaded.
+        # Root not selected by default; three descendant pages downloaded.
         assert "Downloaded:        3" in out
         root_dir = tmp_path / "Acme Docs"
         assert (root_dir / "page-111.doc").exists()
@@ -211,7 +211,7 @@ class TestCliJsonFormat:
         assert all(line["type"] == "page" for line in page_lines)
         assert lines[-1]["type"] == "summary"
         page_ids = {line["pageId"] for line in page_lines}
-        # Root excluded by default; "Draft notes" (333) has no filter applied here.
+        # Root not selected by default; no filters applied here.
         assert page_ids == {"111", "222", "333"}
 
     def test_download_format_json_emits_json_lines_and_nothing_else(
@@ -227,6 +227,42 @@ class TestCliJsonFormat:
         assert lines[-1]["downloaded"] == 3
         statuses = {line["status"] for line in lines if line["type"] == "result"}
         assert statuses == {"DOWNLOADED"}
+
+    def _statuses(self, monkeypatch, capsys, tmp_path, *filters):
+        _patch(monkeypatch)
+        code = main([URL, "--output", str(tmp_path), "--format", "json", *filters])
+        out = capsys.readouterr().out
+        assert code == 0
+        lines = [json.loads(line) for line in out.splitlines() if line]
+        statuses = {
+            line["pageId"]: line["status"] for line in lines if line["type"] == "result"
+        }
+        return statuses, lines[0], lines[-1]
+
+    def test_include_miss_reports_unselected(self, monkeypatch, capsys, tmp_path):
+        # "Team wiki" (111) misses the include term but its child (222) matches.
+        statuses, started, summary = self._statuses(
+            monkeypatch, capsys, tmp_path, "--include", "authentication"
+        )
+        assert statuses == {
+            "111": "UNSELECTED",
+            "222": "DOWNLOADED",
+            "333": "UNSELECTED",
+        }
+        assert started["unselectedPages"] == 2
+        assert started["excludedPages"] == 0
+        assert summary["unselected"] == 2
+        assert summary["excluded"] == 0
+
+    def test_exclude_term_reports_excluded_subtree(self, monkeypatch, capsys, tmp_path):
+        statuses, started, summary = self._statuses(
+            monkeypatch, capsys, tmp_path, "--exclude", "wiki"
+        )
+        assert statuses == {"111": "EXCLUDED", "222": "EXCLUDED", "333": "DOWNLOADED"}
+        assert started["excludedPages"] == 2
+        assert started["unselectedPages"] == 0
+        assert summary["excluded"] == 2
+        assert summary["unselected"] == 0
 
     def test_manifest_written_alongside_text_output(
         self, monkeypatch, capsys, tmp_path

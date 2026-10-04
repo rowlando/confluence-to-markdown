@@ -36,23 +36,32 @@ class Page:
     child_position: int | None
 
 
+# Filter outcomes used by :class:`FilterDecision`.
+OUTCOME_SELECTED = "SELECTED"
+OUTCOME_EXCLUDED = "EXCLUDED"
+"""Matched by an exclude term; prunes the page's whole subtree."""
+OUTCOME_UNSELECTED = "UNSELECTED"
+"""Matched no include term; the page's descendants are still considered."""
+
+
 @dataclass(frozen=True)
 class FilterDecision:
     """The outcome of applying title filters to a page."""
 
-    included: bool
+    outcome: str
     reason: str
-    excluded_by_term: bool = False
-    """True when excluded by an explicit exclude/ignore term (not an include miss).
 
-    Term exclusions prune the whole subtree; include misses do not.
-    """
+    @property
+    def selected(self) -> bool:
+        """True when the page will be downloaded."""
+        return self.outcome == OUTCOME_SELECTED
 
 
 # Download status values used in reporting and :class:`DownloadResult`.
 STATUS_DOWNLOADED = "DOWNLOADED"
 STATUS_SKIPPED = "SKIPPED"
 STATUS_EXCLUDED = "EXCLUDED"
+STATUS_UNSELECTED = "UNSELECTED"
 STATUS_FAILED = "FAILED"
 
 
