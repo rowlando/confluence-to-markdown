@@ -333,20 +333,26 @@ Tests are split per package, mirroring the source tree.
 
 ### Agent skills
 
-Claude Code skills live in `.claude/skills/` and are managed with
-[APM](https://github.com/microsoft/apm): `apm.yml` lists them and
-`apm.lock.yaml` pins the exact commits. The installed files are committed, so
-Claude Code (including cloud sessions) picks them up without installing
-anything. To add or upgrade skills:
+Claude Code skills are managed with [APM](https://github.com/microsoft/apm),
+much like npm: `apm.yml` declares them (cf. `package.json`), `apm.lock.yaml`
+pins the exact commits (cf. `package-lock.json`), and `apm install` puts them
+into `.claude/skills/` (cf. `node_modules/`), which is git-ignored along with
+APM's `apm_modules/` cache.
+
+In Claude Code cloud sessions, a SessionStart hook
+(`.claude/hooks/session-start.sh`) installs APM and runs `apm install`
+automatically. Locally, run it yourself:
 
 ```bash
 uv tool install apm-cli   # or: pip install apm-cli
-# edit apm.yml, then:
 apm install
 ```
 
-Commit the resulting changes to `apm.yml`, `apm.lock.yaml` and
-`.claude/skills/`. `apm_modules/` is APM's download cache and is git-ignored.
+To add or upgrade skills, edit `apm.yml`, run `apm install`, and commit
+`apm.yml` and `apm.lock.yaml`. In cloud sessions, edit `apm.yml` rather than
+running `apm install <package>`: the command-line form checks the package via
+the GitHub API, which cloud sessions block for repositories not attached to
+the session.
 
 ### Contributing
 
