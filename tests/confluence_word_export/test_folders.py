@@ -31,9 +31,7 @@ def node(pid, title, parent, depth=1, typ="page", pos=None):
 class TestApi:
     def test_keeps_folders(self):
         resp = FakeResponse(
-            json_data={
-                "results": [item("f1", "100", 1, "folder"), item("p1", "f1", 2)]
-            }
+            json_data={"results": [item("f1", "100", 1, "folder"), item("p1", "f1", 2)]}
         )
         client = ConfluenceClient(SITE, AUTH, session=FakeSession([resp]))
         pages = client.get_descendant_pages("100")
@@ -170,6 +168,7 @@ class TestCli:
         out = capsys.readouterr().out
         assert "Archive" not in out and "Old page" not in out
 
+
 FOLDER_URL = "https://x.atlassian.net/wiki/spaces/TEAM/folder/900/Infra"
 
 
@@ -177,7 +176,11 @@ class TestFolderRoot:
     def test_parse_folder_url(self):
         from confluence_word_export.urls import parse_root_url
 
-        assert parse_root_url(FOLDER_URL) == ("https://x.atlassian.net", "900", "folder")
+        assert parse_root_url(FOLDER_URL) == (
+            "https://x.atlassian.net",
+            "900",
+            "folder",
+        )
         assert parse_root_url(URL)[2] == "page"
 
     def test_list_only_from_folder_root(self, monkeypatch, capsys, tmp_path):

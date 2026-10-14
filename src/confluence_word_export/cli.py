@@ -284,8 +284,8 @@ def _run(args: argparse.Namespace) -> int:
 
 
 def _run_export(
-            args, site_url, root_page_id, root_type, auth, session, recorder
-        ) -> int:
+    args, site_url, root_page_id, root_type, auth, session, recorder
+) -> int:
     ignore_path, explicit = _resolve_ignore_path(args.ignore_file)
     ignore_terms = load_ignore_terms(ignore_path, explicit=explicit)
     exclude_terms = list(args.exclude) + ignore_terms
