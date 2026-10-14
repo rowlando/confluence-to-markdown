@@ -3,7 +3,8 @@
 Only the endpoints needed for discovery are implemented:
 
 * ``GET /wiki/api/v2/pages/{id}`` for root-page metadata;
-* ``GET /wiki/api/v2/pages/{id}/descendants`` for descendant discovery.
+* ``GET /wiki/api/v2/pages/{id}/descendants`` and
+  ``GET /wiki/api/v2/folders/{id}/descendants`` for descendant discovery.
 """
 
 from __future__ import annotations
@@ -92,39 +93,56 @@ class ConfluenceClient:
 
         data = self._get_json(f"/wiki/api/v2/pages/{page_id}")
         page = _page_from_json(data, depth=0)
-        if page is None:
+        if page is None or page.is_folder:
             raise RootDiscoveryError(f"Content {page_id} is not a Confluence page.")
         return page
 
-    def get_descendant_pages(self, root_page_id: str) -> list[Page]:
+    def get_folder(self, folder_id: str) -> Page:
+        """Retrieve metadata for a single folder."""
+        if not folder_id.isdigit():
+            raise UsageError(f"Invalid folder ID: {folder_id!r}")
+
+        data = self._get_json(f"/wiki/api/v2/folders/{folder_id}")
+        data = {**data, "type": "folder"}
+        folder = _page_from_json(data, depth=0)
+        if folder is None:
+            raise RootDiscoveryError(f"Content {folder_id} is not a Confluence folder.")
+        return folder
+
+    def get_descendant_pages(
+        self, root_page_id: str, root_type: str = "page"
+    ) -> list[Page]:
         """Return all descendant pages, following cursor-based pagination.
 
-        Only descendants of type ``page`` are returned. The API caps each query
-        at ``MAX_DESCENDANT_DEPTH`` levels, so any page found at that depth is
-        queried in turn to reach deeper levels. Depths are always relative to
-        ``root_page_id``.
+        Descendants of type ``page`` and ``folder`` are returned. The API caps
+        each query at ``MAX_DESCENDANT_DEPTH`` levels, so any item found at that
+        depth is queried in turn (via the endpoint for its type) to reach deeper
+        levels. Depths are always relative to ``root_page_id``.
         """
         results: list[Page] = []
         seen: set[str] = set()
         # (page to query, depth of that page relative to the root)
-        pending: list[tuple[str, int]] = [(root_page_id, 0)]
+        pending: list[tuple[str, int, str]] = [(root_page_id, 0, root_type)]
 
         while pending:
-            subtree_id, base_depth = pending.pop(0)
-            for page in self._fetch_descendants(subtree_id, base_depth):
+            subtree_id, base_depth, subtree_type = pending.pop(0)
+            for page in self._fetch_descendants(subtree_id, base_depth, subtree_type):
                 if page.id in seen:
                     continue
                 seen.add(page.id)
                 results.append(page)
                 if page.depth - base_depth >= MAX_DESCENDANT_DEPTH:
-                    pending.append((page.id, page.depth))
+                    pending.append((page.id, page.depth, page.content_type))
 
         return results
 
-    def _fetch_descendants(self, page_id: str, base_depth: int) -> list[Page]:
+    def _fetch_descendants(
+        self, node_id: str, base_depth: int, node_type: str = "page"
+    ) -> list[Page]:
         """Fetch one depth-capped descendants query, offsetting depths."""
         pages: list[Page] = []
-        path: str | None = f"/wiki/api/v2/pages/{page_id}/descendants"
+        collection = "folders" if node_type == "folder" else "pages"
+        path: str | None = f"/wiki/api/v2/{collection}/{node_id}/descendants"
         params: dict[str, Any] | None = {
             "limit": DESCENDANTS_PAGE_LIMIT,
             "depth": MAX_DESCENDANT_DEPTH,
@@ -170,10 +188,12 @@ def _raise_for_status(response: requests.Response) -> None:
 
 
 def _page_from_json(data: dict, depth: int | None) -> Page | None:
-    """Map an API item to :class:`Page`, or ``None`` if it is not a page."""
+    """Map an API item to :class:`Page`, or ``None`` if it is not a page/folder."""
     item_type = data.get("type")
     # The single-page endpoint has no ``type`` field but is always a page.
-    if item_type is not None and item_type != "page":
+    if item_type is None:
+        item_type = "page"
+    if item_type not in ("page", "folder"):
         return None
 
     page_id = data.get("id")
@@ -187,6 +207,7 @@ def _page_from_json(data: dict, depth: int | None) -> Page | None:
         parent_id=str(parent_id) if parent_id is not None else None,
         depth=int(depth) if depth is not None else 0,
         child_position=_coerce_int(data.get("childPosition")),
+        content_type=item_type,
     )
 
 

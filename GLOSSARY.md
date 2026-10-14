@@ -21,6 +21,9 @@ _Avoid_: Child (unless meaning a direct child), sub-page
 A page that will be downloaded: a descendant (or the root page, when asked for) that passes the title filters and has no excluded ancestor.
 _Avoid_: Included page, eligible page
 
+**Folder**:
+A Confluence folder in the page hierarchy. It has no Word export; it only becomes a directory, is shown by `--list-only`, and is not counted as a page.
+
 ### Filtering
 
 **Include term**:

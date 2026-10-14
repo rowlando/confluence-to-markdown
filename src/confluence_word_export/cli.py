@@ -34,7 +34,7 @@ from confluence_word_export.models import (
     DownloadResult,
     Page,
 )
-from confluence_word_export.urls import parse_page_url
+from confluence_word_export.urls import parse_root_url
 
 DEFAULT_OUTPUT = "./confluence-export"
 DEFAULT_IGNORE_FILE = ".confluence-word-export-ignore"
@@ -267,7 +267,7 @@ def _configure_tls(args: argparse.Namespace) -> bool | str | None:
 
 
 def _run(args: argparse.Namespace) -> int:
-    site_url, root_page_id = parse_page_url(args.root_page_url)
+    site_url, root_page_id, root_type = parse_root_url(args.root_page_url)
     auth = load_auth()
 
     verify = _configure_tls(args)
@@ -276,26 +276,34 @@ def _run(args: argparse.Namespace) -> int:
     manifest_path = Path(args.manifest) if args.manifest else None
     recorder = _Recorder(args.format, manifest_path)
     try:
-        return _run_export(args, site_url, root_page_id, auth, session, recorder)
+        return _run_export(
+            args, site_url, root_page_id, root_type, auth, session, recorder
+        )
     finally:
         recorder.close()
 
 
-def _run_export(args, site_url, root_page_id, auth, session, recorder) -> int:
+def _run_export(
+    args, site_url, root_page_id, root_type, auth, session, recorder
+) -> int:
     ignore_path, explicit = _resolve_ignore_path(args.ignore_file)
     ignore_terms = load_ignore_terms(ignore_path, explicit=explicit)
     exclude_terms = list(args.exclude) + ignore_terms
 
     client = ConfluenceClient(site_url, auth, session=session)
-    root_page = client.get_page(root_page_id)
-    descendants = client.get_descendant_pages(root_page_id)
+    if root_type == "folder":
+        root_page = client.get_folder(root_page_id)
+    else:
+        root_page = client.get_page(root_page_id)
+    descendants = client.get_descendant_pages(root_page_id, root_type)
 
     output_dir = Path(args.output)
     placed = build_hierarchy(root_page, descendants, output_dir)
 
     # Decide which pages are download candidates.
     candidates: list[Page] = list(descendants)
-    if args.include_root:
+    # A folder root has no Word export, so it is never a download candidate.
+    if args.include_root and not root_page.is_folder:
         candidates = [root_page] + candidates
 
     decisions = build_decisions(candidates, args.include, exclude_terms)
@@ -341,9 +349,12 @@ def _print_startup_summary(
     ignore_used,
     recorder,
 ):
-    selected = sum(1 for d in decisions.values() if d.selected)
-    excluded = sum(1 for d in decisions.values() if d.outcome == OUTCOME_EXCLUDED)
-    unselected = sum(1 for d in decisions.values() if d.outcome == OUTCOME_UNSELECTED)
+    folder_ids = {p.id for p in descendants if p.is_folder}
+    page_decisions = [d for pid, d in decisions.items() if pid not in folder_ids]
+    selected = sum(1 for d in page_decisions if d.selected)
+    excluded = sum(1 for d in page_decisions if d.outcome == OUTCOME_EXCLUDED)
+    unselected = sum(1 for d in page_decisions if d.outcome == OUTCOME_UNSELECTED)
+    page_count = len(descendants) - len(folder_ids)
 
     recorder.emit(
         {
@@ -352,7 +363,8 @@ def _print_startup_summary(
             "rootPageId": root_page.id,
             "rootPageTitle": root_page.title,
             "includeRoot": args.include_root,
-            "descendantPages": len(descendants),
+            "descendantPages": page_count,
+            "descendantFolders": len(folder_ids),
             "matchingPages": selected,
             "excludedPages": excluded,
             "unselectedPages": unselected,
@@ -368,7 +380,8 @@ def _print_startup_summary(
     print(f"  Root page:         {root_page.title}")
     print(f"  Root page ID:      {root_page.id}")
     print(f"  Download root:     {'yes' if args.include_root else 'no'}")
-    print(f"  Descendant pages:  {len(descendants)}")
+    print(f"  Descendant pages:  {page_count}")
+    print(f"  Descendant folders: {len(folder_ids)}")
     print(f"  Selected pages:    {selected}")
     print(f"  Excluded pages:    {excluded}")
     print(f"  Unselected pages:  {unselected}")
@@ -410,6 +423,7 @@ def _print_list(root_page, descendants, placed, decisions, include_root, recorde
     count = 0
     if (
         include_root
+        and not root_page.is_folder
         and decisions.get(root_page.id, None)
         and decisions[root_page.id].selected
     ):
@@ -427,6 +441,18 @@ def _print_list(root_page, descendants, placed, decisions, include_root, recorde
 
     for page in _ordered_pages(root_page, descendants, placed):
         decision = decisions.get(page.id)
+        if page.is_folder:
+            if decision is not None and decision.outcome != OUTCOME_EXCLUDED:
+                recorder.emit(
+                    {
+                        "type": "folder",
+                        "folderId": page.id,
+                        "title": page.title,
+                        "depth": page.depth,
+                        "path": str(placed[page.id].dir_path),
+                    }
+                )
+            continue
         if decision is None or not decision.selected:
             continue
         p = placed[page.id]
@@ -448,6 +474,7 @@ def _print_list(root_page, descendants, placed, decisions, include_root, recorde
     print(f"{placed[root_page.id].base_name}/")
     if (
         include_root
+        and not root_page.is_folder
         and decisions.get(root_page.id, None)
         and decisions[root_page.id].selected
     ):
@@ -456,6 +483,14 @@ def _print_list(root_page, descendants, placed, decisions, include_root, recorde
 
     for page in _ordered_pages(root_page, descendants, placed):
         decision = decisions.get(page.id)
+        if page.is_folder:
+            if decision is not None and decision.outcome != OUTCOME_EXCLUDED:
+                indent = "  " * page.depth
+                print(
+                    f"{indent}{placed[page.id].base_name}/  "
+                    f"[folderId: {page.id}] -> {placed[page.id].dir_path}"
+                )
+            continue
         if decision is None or not decision.selected:
             continue
         p = placed[page.id]
@@ -481,11 +516,13 @@ def _download_all(
     placed[root_page.id].dir_path.mkdir(parents=True, exist_ok=True)
 
     pages = _ordered_pages(root_page, descendants, placed)
-    if args.include_root:
+    if args.include_root and not root_page.is_folder:
         pages = [root_page] + pages
 
     results: list[DownloadResult] = []
     for page in pages:
+        if page.is_folder:
+            continue
         decision = decisions.get(page.id)
         if decision is None or not decision.selected:
             reason = decision.reason if decision else "n/a"
@@ -532,7 +569,11 @@ def _print_result(result: DownloadResult, verbose: bool, recorder) -> None:
 
 
 def _print_final_summary(descendants, decisions, results, recorder) -> int:
-    selected = sum(1 for d in decisions.values() if d.selected)
+    folder_ids = {p.id for p in descendants if p.is_folder}
+    selected = sum(
+        1 for pid, d in decisions.items() if d.selected and pid not in folder_ids
+    )
+    page_count = len(descendants) - len(folder_ids)
     downloaded = sum(1 for r in results if r.status == STATUS_DOWNLOADED)
     skipped = sum(1 for r in results if r.status == STATUS_SKIPPED)
     excluded = sum(1 for r in results if r.status == STATUS_EXCLUDED)
@@ -542,7 +583,7 @@ def _print_final_summary(descendants, decisions, results, recorder) -> int:
     recorder.emit(
         {
             "type": "summary",
-            "discovered": len(descendants),
+            "discovered": page_count,
             "matched": selected,
             "downloaded": downloaded,
             "skipped": skipped,
@@ -557,7 +598,7 @@ def _print_final_summary(descendants, decisions, results, recorder) -> int:
     print()
     print("Export complete" if failed == 0 else "Export finished with failures")
     print()
-    print(f"Pages discovered:  {len(descendants)}")
+    print(f"Pages discovered:  {page_count}")
     print(f"Pages selected:    {selected}")
     print(f"Downloaded:        {downloaded}")
     print(f"Skipped existing:  {skipped}")
