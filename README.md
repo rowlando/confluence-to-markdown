@@ -5,7 +5,7 @@
 Two small, composable command-line tools (plus a shell script that chains them):
 
 1. **`confluence-word-export`** — downloads a Confluence page hierarchy as Word
-   exports. Given the URL of a root page, it discovers descendant pages via the
+   exports. Given the URL of a root page or folder, it discovers descendant pages via the
    Confluence REST API, filters them by title, and downloads each selected page's
    published Word export, reproducing the Confluence hierarchy as local folders.
 2. **`word-to-markdown`** — converts that directory of Word exports into a
@@ -129,10 +129,10 @@ confluence-word-export URL --list-only
 | --- | --- |
 | `--output PATH` | Output directory (default `./confluence-export`). |
 | `--include TEXT` | Only download pages whose titles contain TEXT (repeatable, OR semantics). |
-| `--exclude TEXT` | Skip pages whose titles contain TEXT (repeatable). |
+| `--exclude TEXT` | Skip pages whose titles contain TEXT (repeatable). Also matches folder titles, pruning everything beneath a matching folder. |
 | `--ignore-file PATH` | Extra exclusion terms file (default `./.confluence-word-export-ignore` if present). |
-| `--include-root` | Also download the supplied root page. |
-| `--list-only` | Show selected pages and intended paths without downloading. |
+| `--include-root` | Also download the supplied root page (no effect for a folder root, which has no Word export). |
+| `--list-only` | Show selected pages and intended paths without downloading. Confluence folders are listed as `Name/ [folderId: …]` (JSON `"type": "folder"`). |
 | `--format {text,json}` | Output format (default `text`). `json` writes one JSON object per line (JSON Lines) to stdout — see [Scripting / composability](#scripting--composability). |
 | `--manifest PATH` | Also write a JSON Lines record of every page processed to PATH, regardless of `--format`. |
 | `--overwrite` | Replace existing Word exports (default: skip). |

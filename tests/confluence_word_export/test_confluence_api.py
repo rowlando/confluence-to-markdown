@@ -107,8 +107,8 @@ class TestDescendants:
                 "results": [
                     {
                         "id": "1",
-                        "title": "folder",
-                        "type": "folder",
+                        "title": "whiteboard",
+                        "type": "whiteboard",
                         "parentId": "100",
                         "depth": 1,
                     },

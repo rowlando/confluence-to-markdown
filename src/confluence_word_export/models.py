@@ -34,6 +34,12 @@ class Page:
     parent_id: str | None
     depth: int
     child_position: int | None
+    content_type: str = "page"
+
+    @property
+    def is_folder(self) -> bool:
+        """True for a Confluence folder (a directory-only node, no export)."""
+        return self.content_type == "folder"
 
 
 # Filter outcomes used by :class:`FilterDecision`.
